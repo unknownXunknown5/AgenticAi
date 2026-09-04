@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 
 POST_HOUR = int(os.getenv("POST_HOUR", "9"))
