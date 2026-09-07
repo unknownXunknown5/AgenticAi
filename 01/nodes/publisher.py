@@ -65,6 +65,8 @@ def publish_to_x(state):
     post = state.get("final_post") or state.get("draft")
     if not post:
         raise ValueError("No post text found in state.")
+    if len(post) > 280:
+        raise ValueError(f"Post is {len(post)} characters; X allows a maximum of 280.")
 
     cookies = _get_playwright_cookies()
 
@@ -134,16 +136,10 @@ def publish_to_x(state):
         # Find and click Post button in modal
         print("[Publisher] Submitting tweet...")
         post_btn = page.locator('[data-testid="tweetButton"]').first
-        try:
-            # Try a normal click first; if it fails due to overlay, force the click.
-            post_btn.click(timeout=30000)
-        except Exception as e:
-            print(f"[Publisher] Normal click failed ({e}), attempting force click...")
-            try:
-                post_btn.click(force=True, timeout=30000)
-            except Exception as e2:
-                print(f"[Publisher] Force click also failed ({e2}), falling back to keyboard shortcut.")
-                page.keyboard.press("Control+Enter")
+        if post_btn.get_attribute("aria-disabled") == "true" or not post_btn.is_enabled():
+            browser.close()
+            raise RuntimeError("X kept the Post button disabled. The post may be too long or the session is not ready.")
+        post_btn.click(timeout=30000)
         
         # Wait for the tweet to publish and extract URL
         tweet_url = None
@@ -166,9 +162,12 @@ def publish_to_x(state):
         page.wait_for_timeout(3000)
         browser.close()
 
-    print(f"[Publisher] Tweet published successfully! URL: {tweet_url or 'https://x.com'}")
+    if not tweet_url:
+        raise RuntimeError("X did not confirm the tweet or provide a tweet URL.")
+
+    print(f"[Publisher] Tweet published successfully! URL: {tweet_url}")
 
     return {
         "tweet_id": tweet_id or "",
-        "tweet_url": tweet_url or "https://x.com"
+        "tweet_url": tweet_url
     }

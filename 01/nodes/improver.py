@@ -2,10 +2,11 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
 from config import GEMINI_API_KEY
+from nodes.response_text import response_to_text
 
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model="gemini-3.6-flash",
     temperature=0.7,
     api_key=GEMINI_API_KEY
 )
@@ -56,5 +57,5 @@ def improve_post(state):
     })
 
     return {
-        "draft": response.content.strip()
+        "draft": response_to_text(response.content)
     }
