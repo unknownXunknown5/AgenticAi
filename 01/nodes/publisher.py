@@ -101,18 +101,29 @@ def publish_to_x(state):
                 "X session cookie is expired or invalid. Please update data/cookies.json or X_AUTH_TOKEN in .env"
             )
 
-        # Open compose modal via side nav button
+        # Ensure the compose button is in view and click it
         nav_button = page.locator('[data-testid="SideNav_NewTweet_Button"]').first
+        # Scroll into view if needed
+        try:
+            nav_button.scroll_into_view_if_needed()
+        except Exception:
+            pass
         if nav_button.is_visible():
             nav_button.click()
             page.wait_for_timeout(1500)
+        else:
+            # Fallback: open compose page directly
+            print("[Publisher] Side nav button not visible, opening compose URL directly")
+            page.goto("https://x.com/compose/post", wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(1500)
 
-        # Focus compose textarea
+        # Focus compose textarea (modal may have different selector in headless mode)
         textarea = page.locator('[data-testid="tweetTextarea_0"]').first
         if not textarea.is_visible():
             textarea = page.locator('div[role="textbox"]').first
 
-        textarea.wait_for(state="visible", timeout=10000)
+        # Increase timeout for slower page loads in CI
+        textarea.wait_for(state="visible", timeout=30000)
         textarea.click()
 
         # Type the tweet
