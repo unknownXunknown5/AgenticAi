@@ -134,11 +134,17 @@ def publish_to_x(state):
         # Find and click Post button in modal
         print("[Publisher] Submitting tweet...")
         post_btn = page.locator('[data-testid="tweetButton"]').first
-        if post_btn.is_visible() and post_btn.get_attribute("aria-disabled") != "true":
-            post_btn.click()
-        else:
-            page.keyboard.press("Control+Enter")
-
+        try:
+            # Try a normal click first; if it fails due to overlay, force the click.
+            post_btn.click(timeout=30000)
+        except Exception as e:
+            print(f"[Publisher] Normal click failed ({e}), attempting force click...")
+            try:
+                post_btn.click(force=True, timeout=30000)
+            except Exception as e2:
+                print(f"[Publisher] Force click also failed ({e2}), falling back to keyboard shortcut.")
+                page.keyboard.press("Control+Enter")
+        
         # Wait for the tweet to publish and extract URL
         tweet_url = None
         tweet_id = None
