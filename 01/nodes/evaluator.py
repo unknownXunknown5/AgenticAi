@@ -2,7 +2,11 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
 from config import GEMINI_API_KEY
-llm=ChatGoogleGenerativeAI(model='gemini-2.5-flash',temperature=0,)  # 0 to 0.3 determinitic and predictable but 0.8 to 1 randomness,dversity and creativeness jada hota hai
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    temperature=0,
+    api_key=GEMINI_API_KEY
+)
 
 prompt = ChatPromptTemplate.from_messages([
     (
@@ -37,27 +41,26 @@ FEEDBACK: short feedback
 ])
 
 def evaluate_post(state):
-    chain=prompt | llm
-    response=chain.invoke({
-        "draft":state['draft']
+    chain = prompt | llm
+    response = chain.invoke({
+        "draft": state['draft']
     })
 
-    text =response.content.strip()
+    text = response.content.strip()
 
-    score=5
-    feedback=text
+    score = 5
+    feedback = text
 
     for line in text.splitlines():
         if line.startswith("SCORE"):
             try:
-                score=int(line.split(":")[1].strip())
+                score = int(line.split(":")[1].strip())
             except ValueError:
                 pass
-
         elif line.startswith("FEEDBACK:"):
-            feedback=line.split(":",1)[1].strip() #It extracts the text after "FEEDBACK:" and stores it in feedback.
+            feedback = line.split(":", 1)[1].strip()
 
-        return {
+    return {
         "score": score,
         "feedback": feedback
     }    

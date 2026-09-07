@@ -1,40 +1,157 @@
-import requests
+import json
+import re
+from pathlib import Path
+from playwright.sync_api import sync_playwright
 
-from config import X_ACCESS_TOKEN
+from config import X_AUTH_TOKEN, X_CT0
+
+COOKIES_FILE = Path("data/cookies.json")
+
+
+def _get_playwright_cookies():
+    """Load cookies from data/cookies.json or fall back to .env tokens."""
+    cookies = []
+
+    if COOKIES_FILE.exists():
+        try:
+            with open(COOKIES_FILE, "r", encoding="utf-8") as f:
+                raw_cookies = json.load(f)
+
+            for c in raw_cookies:
+                cookie = {
+                    "name": c["name"],
+                    "value": c["value"],
+                    "domain": c.get("domain", ".x.com"),
+                    "path": c.get("path", "/"),
+                    "secure": c.get("secure", True),
+                    "httpOnly": c.get("httpOnly", False),
+                }
+                same_site = c.get("sameSite")
+                if same_site in ["lax", "strict"]:
+                    cookie["sameSite"] = same_site.capitalize()
+                elif same_site == "no_restriction":
+                    cookie["sameSite"] = "None"
+                cookies.append(cookie)
+            return cookies
+        except Exception:
+            pass
+
+    if X_AUTH_TOKEN:
+        cookies.append({
+            "name": "auth_token",
+            "value": X_AUTH_TOKEN,
+            "domain": ".x.com",
+            "path": "/",
+            "secure": True,
+            "httpOnly": True,
+        })
+        if X_CT0:
+            cookies.append({
+                "name": "ct0",
+                "value": X_CT0,
+                "domain": ".x.com",
+                "path": "/",
+                "secure": True,
+                "httpOnly": False,
+            })
+        return cookies
+
+    raise RuntimeError(
+        "Twitter session cookies not found! Please provide data/cookies.json or set X_AUTH_TOKEN in .env"
+    )
 
 
 def publish_to_x(state):
+    post = state.get("final_post") or state.get("draft")
+    if not post:
+        raise ValueError("No post text found in state.")
 
-    if not X_ACCESS_TOKEN:
-        raise RuntimeError(
-            "X_ACCESS_TOKEN is missing from .env"
+    cookies = _get_playwright_cookies()
+
+    print("\n[Publisher] Launching browser to publish tweet via session...")
+
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.launch(
+                channel="chrome",
+                headless=True,
+                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
+            )
+        except Exception:
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
+            )
+
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 800}
         )
 
-    post = state["final_post"]
+        context.add_cookies(cookies)
+        page = context.new_page()
 
-    response = requests.post(
-        "https://api.x.com/2/tweets",
-        headers={
-            "Authorization": f"Bearer {X_ACCESS_TOKEN}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "text": post
-        },
-        timeout=30
-    )
+        print("[Publisher] Opening https://x.com/home...")
+        page.goto("https://x.com/home", wait_until="domcontentloaded", timeout=30000)
+        page.wait_for_timeout(3000)
 
-    if response.status_code not in (200, 201):
-        raise RuntimeError(
-            f"X API error {response.status_code}: "
-            f"{response.text}"
-        )
+        if "login" in page.url or "i/flow" in page.url:
+            browser.close()
+            raise RuntimeError(
+                "X session cookie is expired or invalid. Please update data/cookies.json or X_AUTH_TOKEN in .env"
+            )
 
-    data = response.json()
+        # Open compose modal via side nav button
+        nav_button = page.locator('[data-testid="SideNav_NewTweet_Button"]').first
+        if nav_button.is_visible():
+            nav_button.click()
+            page.wait_for_timeout(1500)
 
-    tweet_id = data["data"]["id"]
+        # Focus compose textarea
+        textarea = page.locator('[data-testid="tweetTextarea_0"]').first
+        if not textarea.is_visible():
+            textarea = page.locator('div[role="textbox"]').first
+
+        textarea.wait_for(state="visible", timeout=10000)
+        textarea.click()
+
+        # Type the tweet
+        print("[Publisher] Typing tweet...")
+        page.keyboard.type(post, delay=10)
+        page.wait_for_timeout(1000)
+
+        # Find and click Post button in modal
+        print("[Publisher] Submitting tweet...")
+        post_btn = page.locator('[data-testid="tweetButton"]').first
+        if post_btn.is_visible() and post_btn.get_attribute("aria-disabled") != "true":
+            post_btn.click()
+        else:
+            page.keyboard.press("Control+Enter")
+
+        # Wait for the tweet to publish and extract URL
+        tweet_url = None
+        tweet_id = None
+
+        try:
+            toast = page.locator('[data-testid="toast"]').first
+            toast.wait_for(state="visible", timeout=8000)
+            link = toast.locator('a[href*="/status/"]').first
+            if link.count() > 0:
+                href = link.get_attribute("href")
+                if href:
+                    tweet_url = href if href.startswith("http") else f"https://x.com{href}"
+                    match = re.search(r"/status/(\d+)", tweet_url)
+                    if match:
+                        tweet_id = match.group(1)
+        except Exception:
+            pass
+
+        page.wait_for_timeout(3000)
+        browser.close()
+
+    print(f"[Publisher] Tweet published successfully! URL: {tweet_url or 'https://x.com'}")
 
     return {
-        "tweet_id": tweet_id,
-        "tweet_url": f"https://x.com/i/web/status/{tweet_id}"
+        "tweet_id": tweet_id or "",
+        "tweet_url": tweet_url or "https://x.com"
     }
