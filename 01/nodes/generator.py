@@ -53,6 +53,7 @@ def generate_post(state):
     more robust in CI/GitHub Actions where transient rate‑limits are
     common.
     """
+    global llm
     max_retries = 3
     attempt = 0
     while attempt < max_retries:
@@ -76,9 +77,7 @@ def generate_post(state):
                     time.sleep(5)
                     if attempt == 2:
                         print("[Generator] Switching to fallback model 'gemini-1.5-flash'.")
-                        global llm
                         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.8, api_key=GEMINI_API_KEY)
                     continue
-            # Re‑raise any other exception
             raise
     raise RuntimeError("Failed to generate post after multiple retries due to Gemini API availability.")
