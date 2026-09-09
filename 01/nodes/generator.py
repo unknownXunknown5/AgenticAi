@@ -8,7 +8,7 @@ from nodes.response_text import response_to_text
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-3.6-flash",
-    temperature=0.8,
+    # temperature=0.8, temperature 3.6 me pahkle se hi hota hai
     api_key=GEMINI_API_KEY,
 )
 
