@@ -21,7 +21,7 @@ Create an engaging X post about the given topic.
 
 Rules:
 
-- Maximum 280 characters.
+- Maximum 230 characters.
 - Strong opening hook.
 - Useful information.
 - Natural language.
