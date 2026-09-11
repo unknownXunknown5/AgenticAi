@@ -7,7 +7,7 @@ from config import GEMINI_API_KEY
 from nodes.response_text import response_to_text
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-3.6-flash",
+    model="gemini-3.5-flash",
     # temperature=0.8, temperature 3.6 me pahkle se hi hota hai
     api_key=GEMINI_API_KEY,
 )
@@ -23,7 +23,7 @@ Create an engaging X post about the given topic.
 
 Rules:
 
-- Maximum 230 characters.
+- Maximum 250 characters.
 - Strong opening hook.
 - Useful information.
 - Natural language.
@@ -66,7 +66,7 @@ def generate_post(state):
                 "tone": state["tone"]
             })
             draft = " ".join(response_to_text(response.content).split())
-            if len(draft) > 280:
+            if len(draft) > 250:
                 draft = draft[:277].rsplit(" ", 1)[0] + "..."
             print(f"[Generator] Draft generated: {draft}")
             return {"draft": draft, "attempts": 1}
